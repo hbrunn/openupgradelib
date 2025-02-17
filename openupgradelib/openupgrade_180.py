@@ -1,6 +1,6 @@
 # Copyright 2025 Hunki Enterprises BV
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
-from .openupgrade import logged_query
+from .openupgrade import get_legacy_name, logged_query
 
 
 def convert_company_dependent(
@@ -70,3 +70,29 @@ def convert_company_dependent(
     )
     for company_id, value in env.cr.fetchall():
         env["ir.default"].set(model_name, field_name, value, company_id=company_id)
+
+
+def fill_tour_consumed(env, tour_name, tour_name_v17=None):
+    """
+    web_tour.tour used to be just a marker which tour has been run for which user,
+    with a new record for every user who finished the tour.
+    OpenUpgrade moves this table aside in the v18 migration of web_tour, so that
+    migration scripts can call this function to mark tours as completed for users
+    who did so in v17
+
+    :param tour_name: the name of the tour as of web_tour_tour.name
+    :param tour_name_v17: v17 name of the tour in case it has been renamed
+    """
+    logged_query(
+        env.cr,
+        f"""
+        INSERT INTO res_users_web_tour_tour_rel
+        (res_users_id, web_tour_tour_id)
+        SELECT legacy_table.user_id, web_tour_tour.id
+        FROM
+        {get_legacy_name('web_tour_tour')} legacy_table,
+        web_tour_tour
+        WHERE web_tour_tour.name='{tour_name}'
+        AND legacy_table.name='{tour_name_v17 or tour_name}'
+        """,
+    )
