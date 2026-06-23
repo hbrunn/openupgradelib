@@ -188,6 +188,29 @@ class TestOpenupgradelib(unittest.TestCase):
             self.assertEqual(admin_user.name, "Administrator")
             self.assertIn("original signature", admin_user.signature)
 
+    def test_disable_invalid_filters(self):
+        invalid_filter = self.env["ir.filters"].create(
+            {
+                "name": "Invalid filter",
+                "domain": "[('nonexisting_field', '=', True)]",
+                "model_id": "res.partner",
+            }
+        )
+        self.assertTrue(invalid_filter.active)
+        openupgrade.disable_invalid_filters(self.env)
+        self.assertFalse(invalid_filter.active)
+        invalid_filter.active = True
+        if "user_id" in invalid_filter._fields:
+            invalid_filter.user_id = self.env.user
+        if "user_ids" in invalid_filter._fields:
+            invalid_filter.write(
+                {
+                    "user_ids": [(6, 0, self.env.user.ids)],
+                }
+            )
+        openupgrade.disable_invalid_filters(self.env)
+        self.assertFalse(invalid_filter.active)
+
     def tearDown(self):
         super().tearDown()
         self.cr.close()
